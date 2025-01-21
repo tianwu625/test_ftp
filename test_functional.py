@@ -243,7 +243,11 @@ class TestFtpStoreData(unittest.TestCase):
         super().tearDown()
 
     def get_tmp_file_path(self):
-        return os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        if p.startswith('//'):
+            return p.replace('//', '/')
+        else:
+            return p
 
     def test_stor(self):
         data = b'abcde12345' * 100000
@@ -523,7 +527,11 @@ class TestFtpRetrieveData(unittest.TestCase):
         super().tearDown()
 
     def get_tmp_file_path(self):
-        return os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        if p.startswith('//'):
+            return p.replace('//', '/')
+        else:
+            return p
 
     def test_retr(self):
         data = b'abcde12345' * 100000
