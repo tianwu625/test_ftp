@@ -12,7 +12,7 @@ def pytest_addoption(parser):
 def user_config(request):
     config_path = request.config.getoption('--user_config_path')
     assert(config_path != '' and os.path.exists(config_path))
-    if not os.path.isabs('config_path'):
+    if not os.path.isabs(config_path):
         config_path = os.path.abspath(config_path)
     with open(config_path, 'r') as f:
         uconfig = json.load(f)
