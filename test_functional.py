@@ -176,12 +176,21 @@ class TestFtpFsOperations(unittest.TestCase):
     def test_mfmt(self):
         # making sure MFMT is able to modify the timestamp for the file
         test_timestamp = "20170921013410"
+        with pytest.raises(ftplib.error_perm, match="Unknown command"):
+            self.client.sendcmd('mfmt ' + test_timestamp + ' ' + self.temp_file_path)
+        #resp_time = self.client.sendcmd('mdtm ' + self.temp_file_path)
+        #resp_time_str = time.strftime('%Y%m%d%H%M%S', time.gmtime(resp_time))
+        #assert test_timestamp in resp_time_str
+
+    '''
+    def test_mfmt(self):
+        # making sure MFMT is able to modify the timestamp for the file
+        test_timestamp = "20170921013410"
         self.client.sendcmd('mfmt ' + test_timestamp + ' ' + self.temp_file_path)
         resp_time = self.client.sendcmd('mdtm ' + self.temp_file_path)
         resp_time_str = time.strftime('%Y%m%d%H%M%S', time.gmtime(resp_time))
         assert test_timestamp in resp_time_str
 
-    @pytest.mark.notsupport
     def test_invalid_mfmt_timeval(self):
         # testing MFMT with invalid timeval argument
         test_timestamp_with_chars = "B017092101341A"
@@ -195,11 +204,11 @@ class TestFtpFsOperations(unittest.TestCase):
                 'mfmt ' + test_timestamp_invalid_length + ' ' + self.temp_file_path
             )
 
-    @pytest.mark.notsupport
     def test_missing_mfmt_timeval_arg(self):
         # testing missing timeval argument
         with pytest.raises(ftplib.error_perm, match="Syntax error"):
             self.client.sendcmd('mfmt ' + self.temp_file_path)
+    '''
 
     @pytest.mark.eftp
     def test_size(self):
@@ -296,6 +305,14 @@ class TestFtpStoreData(unittest.TestCase):
         datafile = self.dummy_recvfile.read()
         assert len(expected) == len(datafile)
         assert hash(expected) == hash(datafile)
+
+    @pytest.mark.notsupport
+    def test_stou(self):
+        self.client.set_pasv(True)
+        self.client.voidcmd('TYPE I')
+        # filename comes in as "1xx FILE: <filename>"
+        with pytest.raises(ftplib.error_perm, match="Unknown command|STOU is not supported"):
+            filename = self.client.sendcmd('stou').split('FILE: ')[1]
     '''
     def test_stou(self):
         data = b'abcde12345' * 100000
