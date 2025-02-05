@@ -6,6 +6,7 @@ import time
 import io
 import contextlib
 import threading
+import re
 
 from . import GLOBAL_TIMEOUT, BUFSIZE, INTERRUPTED_TRANSF_SIZE
 from . import get_tmpfilename
@@ -118,6 +119,20 @@ class TestFtpFsOperations(unittest.TestCase):
         share_path = self.get_share_path()
         self.client.cwd(share_path)
         assert os.path.normpath(self.client.pwd()) == share_path
+
+    def test_xpwd(self):
+        work_path = self.get_work_path()
+        return_code, current_path = self.client.sendcmd("xpwd").split(" ", 1)
+        pattern = r'"[^"]*"'
+        match = re.search(pattern, current_path)
+        m_path = match.group(0).strip("\"") if match else ""
+        assert return_code == "257" and work_path == m_path
+        share_path = self.get_share_path()
+        self.client.cwd(share_path)
+        return_code, current_path = self.client.sendcmd("xpwd").split(" ", 1)
+        match = re.search(pattern, current_path)
+        m_path = match.group(0).strip("\"") if match else ""
+        assert return_code == "257" and share_path == m_path
 
     def get_tmp_path(self, tmp_file=None):
         if tmp_file == None:
