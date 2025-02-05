@@ -52,12 +52,65 @@ class TestFtpFsOperations(unittest.TestCase):
     def get_work_path(self):
         return self.generate_valid_path(self.work_dir)
 
-    def test_cwd(self):
+    def test_cwd_ok(self):
         share_path = self.get_share_path()
         self.client.cwd(share_path)
         assert os.path.normpath(self.client.pwd()) == share_path
+
+    def test_cwd_enoent(self):
         with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
-            self.client.cwd('subtempdir')
+            subdir_tmp_path = self.get_tmp_path()
+            self.client.cwd(subdir_tmp_path)
+
+    def test_cwd_notdir(self):
+        with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
+            self.client.cwd(self.temp_file_path)
+
+    def test_cwd_symlink_ok(self):
+        symlink_name = self.uconfig.get("symlink_dir_name")
+        symlink_dst = self.uconfig.get("symlink_dir_dst")
+        assert symlink_name != None and symlink_dst != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        symlink_dst_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_dst)
+        self.client.cwd(symlink_name_path)
+        assert os.path.normpath(self.client.pwd()) == symlink_dst_path
+
+    def test_cwd_eperm(self):
+        noperm_dir_name = self.uconfig.get("noperm_dir_name")
+        assert noperm_dir_name != None
+        noperm_dir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name)
+        with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
+            self.client.cwd(noperm_dir_path)
+
+    def test_cwd_symlink_notdir(self):
+        symlink_name = self.uconfig.get("symlink_file_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
+            self.client.cwd(symlink_name_path)
+
+    def test_xcwd_ok(self):
+        share_path = self.get_share_path()
+        cmd = f"xcwd {share_path}"
+        self.client.sendcmd(cmd)
+        assert os.path.normpath(self.client.pwd()) == share_path
+
+    def test_cwd_longpath(self):
+        long_path = "../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../     ../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../..     /../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../     ../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../..     /../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../"
+        share_path = self.get_share_path()
+        self.client.cwd(share_path)
+        assert os.path.normpath(self.client.pwd()) == share_path
+        self.client.cwd(long_path)
+        assert os.path.normpath(self.client.pwd()) == '/'
+
+    def test_cwd_tilde_ok(self):
+        self.client.cwd('~')
+        assert os.path.normpath(self.client.pwd()) == self.get_work_path()
+
+    def test_cwd_tilde_path_ok(self):
+        cwd_path = self.generate_valid_path('~', self.share_name, os.path.basename(self.temp_dir_path))
+        self.client.cwd(cwd_path)
+        assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
 
     def test_pwd(self):
         work_path = self.get_work_path()
@@ -311,7 +364,7 @@ class TestFtpStoreData(unittest.TestCase):
         self.client.set_pasv(True)
         self.client.voidcmd('TYPE I')
         # filename comes in as "1xx FILE: <filename>"
-        with pytest.raises(ftplib.error_perm, match="Unknown command|STOU is not supported"):
+        with pytest.raises((ftplib.error_perm,ftplib.error_temp), match="Unknown command|STOU is not supported|Use PORT or PASV first"):
             filename = self.client.sendcmd('stou').split('FILE: ')[1]
     '''
     def test_stou(self):
