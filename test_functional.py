@@ -151,7 +151,7 @@ class TestFtpFsOperations(unittest.TestCase):
         except Exception as e:
             pass
 
-    def test_cdup(self):
+    def test_cdup_ok(self):
         self.client.cwd(self.temp_dir_path)
         assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
         self.client.sendcmd('cdup')
@@ -159,9 +159,24 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.sendcmd('cdup')
         assert self.client.pwd() == os.path.dirname(os.path.dirname(self.temp_dir_path))
 
+    def test_cdup_rootdirectory(self):
         # make sure we can't escape from root directory
         self.client.cwd('/')
         self.client.sendcmd('cdup')
+        assert self.client.pwd() == '/'
+
+    def test_xcup_ok(self):
+        self.client.cwd(self.temp_dir_path)
+        assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
+        self.client.sendcmd('xcup')
+        assert os.path.normpath(self.client.pwd()) == os.path.dirname(self.temp_dir_path)
+        self.client.sendcmd('xcup')
+        assert self.client.pwd() == os.path.dirname(os.path.dirname(self.temp_dir_path))
+
+    def test_xcup_rootdirectory(self):
+        # make sure we can't escape from root directory
+        self.client.cwd('/')
+        self.client.sendcmd('xcup')
         assert self.client.pwd() == '/'
 
     def test_mkd(self):
