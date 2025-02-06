@@ -179,7 +179,11 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.sendcmd('xcup')
         assert self.client.pwd() == '/'
 
-    def test_mkd(self):
+    def test_mkd_ok(self):
+        subpath = self.make_tmp_dir()
+        self.clean_tmp_dir(subpath)
+
+    def test_mkd_exists(self):
         subpath = self.make_tmp_dir()
         # make sure we can't create directories which already exist
         # (probably not really necessary);
@@ -188,6 +192,68 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
             self.client.mkd(subpath)
 
+        self.clean_tmp_dir(subpath)
+
+    def test_mkd_symlink_exist(self):
+        symlink_name = self.unconfig.get("symlink_dir_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
+            self.client.mkd(symlink_name_path)
+
+    def test_mkd_with_spaces(self):
+        spaces_path = self.generate_valid_path(self.work_dir, self.share_name, "dir spaces")
+        r_path = self.client.mkd(spaces_path)
+        #assert r_path == spaces_path
+        self.clean_tmp_dir(spaces_path)
+
+    def test_mkd_not_uft8_with_spaces(self):
+        spaces_path = self.generate_valid_path(self.work_dir, self.share_name, "olá çim poi...!#$%#%$>= ü")
+        with pytest.raises(ftplib.error_perm, match="Invalid request"):
+            r_path = self.client.mkd(spaces_path)
+
+    def test_mkd_rooted(self):
+        root_path = self.generate_valid_path("/", "sharename")
+        with pytest.raises(ftplib.error_perm, match="Invalid path|Create directory operation failed"):
+            self.client.mkd(root_path)
+
+    def test_mkd_with_cwd(self):
+        share_path = self.get_share_path()
+        self.client.cwd(share_path)
+        tmpdir = get_tmpfilename()
+        res_path = self.client.mkd(tmpdir)
+        except_path = self.generate_valid_path(share_path, tmpdir)
+        #assert res_path == except_path
+        self.clean_tmp_dir(except_path)
+
+    def test_mkd_enoent(self):
+        subdirpath = self.get_tmp_path()
+        subsubdir = get_tmpfilename()
+        subsubpath = self.generate_valid_path(subdirpath, subsubdir)
+        with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
+            self.client.mkd(subsubpath)
+
+    def test_mkd_eperm(self):
+        noperm_dir_name = self.uconfig.get("noperm_dir_name")
+        assert noperm_dir_name != None
+        noperm_subdir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name, get_tmpfilename())
+        with pytest.raises(ftplib.error_perm, match="Create directory opertion failed"):
+            self.client.mkd(noperm_subdir_path)
+
+    def test_xmkd_ok(self):
+        subpath = self.get_tmp_path()
+        dirname = self.client.sendcmd(f'xmkd {subpath}')
+        self.clean_tmp_dir(subpath)
+
+    def test_mkd_digits(self):
+        self.client.cwd(self.get_share_path())
+        self.client.mkd("00001")
+        self.clean_tmp_dir(self.generate_valid_path(self.get_share_path(), "00001"))
+
+    def test_mkd_embedded_tab(self):
+        subpath = self.generate_valid_path(self.get_share_path(), "ab\tcd")
+        r_path = self.client.mkd(subpath)
+        #assert subpath == r_path
         self.clean_tmp_dir(subpath)
 
     def test_rmd(self):
