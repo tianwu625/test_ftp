@@ -372,8 +372,7 @@ class TestFtpStoreData(unittest.TestCase):
 
     client_class = ftplib.FTP
 
-    def setUp(self):
-        super().setUp()
+    def make_client(self):
         server_host = self.uconfig.get('server_host')
         server_port = self.uconfig.get('server_port', 21)
         server_user = self.uconfig.get('server_user')
@@ -383,6 +382,10 @@ class TestFtpStoreData(unittest.TestCase):
         self.client = self.client_class(timeout=timeout)
         self.client.connect(server_host, server_port)
         self.client.login(server_user,server_password)
+
+    def setUp(self):
+        super().setUp()
+        self.make_client()
         self.work_dir = self.uconfig.get('work_dir')
         self.share_name = self.uconfig.get('share_name')
         self.dummy_recvfile = io.BytesIO()
@@ -641,6 +644,8 @@ class TestFtpStoreData(unittest.TestCase):
         self.client.sock.settimeout(0.1)
         with pytest.raises((OSError, EOFError)):
             self.client.sendcmd('noop')
+        #reconnect ftp server for clean
+        self.make_client()
 
     def test_stor_empty_file(self):
         self.temp_file_path = self.get_tmp_file_path()
