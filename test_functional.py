@@ -74,6 +74,7 @@ class TestFtpFsOperations(unittest.TestCase):
             self.client.cwd(self.temp_file_path)
 
     @pytest.mark.base
+    @pytest.mark.symlink
     @pytest.mark.cwd
     def test_cwd_symlink_ok(self):
         symlink_name = self.uconfig.get("symlink_dir_name")
@@ -85,6 +86,7 @@ class TestFtpFsOperations(unittest.TestCase):
         assert os.path.normpath(self.client.pwd()) == symlink_dst_path
 
     @pytest.mark.base
+    @pytest.mark.perm
     @pytest.mark.cwd
     def test_cwd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
@@ -94,6 +96,7 @@ class TestFtpFsOperations(unittest.TestCase):
             self.client.cwd(noperm_dir_path)
 
     @pytest.mark.base
+    @pytest.mark.symlink
     @pytest.mark.cwd
     def test_cwd_symlink_notdir(self):
         symlink_name = self.uconfig.get("symlink_file_name")
@@ -231,6 +234,7 @@ class TestFtpFsOperations(unittest.TestCase):
         self.clean_tmp_dir(subpath)
 
     @pytest.mark.base
+    @pytest.mark.symlink
     @pytest.mark.mkd
     def test_mkd_symlink_exist(self):
         symlink_name = self.unconfig.get("symlink_dir_name")
@@ -282,6 +286,7 @@ class TestFtpFsOperations(unittest.TestCase):
             self.client.mkd(subsubpath)
 
     @pytest.mark.base
+    @pytest.mark.perm
     @pytest.mark.mkd
     def test_mkd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
@@ -334,6 +339,7 @@ class TestFtpFsOperations(unittest.TestCase):
             self.client.rmd('/')
 
     @pytest.mark.base
+    @pytest.mark.symlink
     @pytest.mark.rmd
     def test_rmd_symlink(self):
         symlink_dst = self.uconfig.get("symlink_rmdir_dst")
@@ -342,6 +348,7 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.rmd(symlink_dst_path)
 
     @pytest.mark.base
+    @pytest.mark.perm
     @pytest.mark.rmd
     def test_rmd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
@@ -396,13 +403,45 @@ class TestFtpFsOperations(unittest.TestCase):
         except Exception as e:
             pass
 
-    def test_dele(self):
+    @pytest.mark.base
+    @pytest.mark.dele
+    def test_dele_ok(self):
         # upload an empty file to ftp server
         tmp_path = self.make_tmp_file()
         # delete empty file before upload
         self.client.delete(tmp_path)
-        with pytest.raises(ftplib.error_perm):
-            self.client.delete(self.share_name)
+
+    @pytest.mark.base
+    @pytest.mark.dele
+    def test_dele_enoent(self):
+        tmp_path = self.get_tmp_path()
+        with pytest.raises(ftplib.error_perm, match="Delete operation failed"):
+            self.client.delete(tmp_path)
+
+    @pytest.mark.base
+    @pytest.mark.perm
+    @pytest.mark.dele
+    def test_dele_eperm(self):
+        noperm_file_name = self.uconfig.get("noperm_file_name")
+        assert noperm_file_name != None
+        noperm_file_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name)
+        with pytest.raises(ftplib.error_perm, match="Delete operation failed"):
+            self.client.delete(noperm_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.dele
+    def test_dele_notfile(self):
+        with pytest.raises(ftplib.error_perm, match="Delete operation failed"):
+            self.client.delete(self.temp_dir_path)
+
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.dele
+    def test_dele_symlink(self):
+        symlink_name = self.uconfig.get("symlink_delete_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        self.client.delete(symlink_name_path)
 
     def test_rnfr_rnto(self):
         temp_file_path = self.get_tmp_path()
