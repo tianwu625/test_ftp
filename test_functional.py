@@ -256,16 +256,56 @@ class TestFtpFsOperations(unittest.TestCase):
         #assert subpath == r_path
         self.clean_tmp_dir(subpath)
 
-    def test_rmd(self):
+    def test_rmd_ok(self):
         subpath = self.make_tmp_dir()
         self.client.rmd(subpath)
+
+    def test_rmd_enoent(self):
+        subpath = self.get_tmp_path()
         with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
             self.client.rmd(subpath)
         # make sure we can't remove the root directory
+    def test_rmd_rooted(self):
         with pytest.raises(
             ftplib.error_perm, match="Remove directory operation failed|Invalid path"
         ):
             self.client.rmd('/')
+
+    def test_rmd_symlink(self):
+        symlink_dst = self.uconfig.get("symlink_rmdir_dst")
+        assert symlink_dst != None
+        symlink_dst_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_dst)
+        self.client.rmd(symlink_dst_path)
+
+    def test_rmd_eperm(self):
+        noperm_dir_name = self.uconfig.get("noperm_dir_name")
+        assert noperm_dir_name != None
+        noperm_dir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name)
+        with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
+            self.client.rmd(noperm_dir_path)
+
+    def test_rmd_notdir(self):
+        with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
+            self.client.rmd(self.temp_file_path)
+
+    def test_rmd_notempty(self):
+        subpath = self.make_tmp_dir()
+        subsubname = get_tmpfilename()
+        subsubpath = self.generate_valid_path(subpath, subsubname)
+        self.client.mkd(subsubpath)
+        with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
+            self.client.rmd(subpath)
+        self.clean_tmp_dir(subsubpath)
+        self.clean_tmp_dir(subpath)
+
+    def test_xrmd_ok(self):
+        subpath = self.make_tmp_dir()
+        self.client.sendcmd(f'xrmd {subpath}')
+
+    def test_rmd_with_spaces(self):
+        subpath = self.generate_valid_path(self.work_dir, self.share_name, "foo bar zoo")
+        self.client.mkd(subpath)
+        self.client.rmd(subpath)
 
     def make_tmp_file(self):
         tmpfile = get_tmpfilename()
