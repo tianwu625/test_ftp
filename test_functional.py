@@ -578,7 +578,9 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.sendcmd('mdtm ' + symlink_name_path)
 
     @pytest.mark.notsupport
-    def test_mfmt(self):
+    @pytest.mark.base
+    @pytest.mark.mfmt
+    def test_mfmt_notsupport(self):
         # making sure MFMT is able to modify the timestamp for the file
         test_timestamp = "20170921013410"
         with pytest.raises(ftplib.error_perm, match="Unknown command"):
