@@ -549,14 +549,33 @@ class TestFtpFsOperations(unittest.TestCase):
         t1.join()
         self.clean_tmp_file(temp_file_path2)
 
-    def test_mdtm(self):
+    @pytest.mark.base
+    @pytest.mark.mdtm
+    def test_mdtm_ok(self):
         self.client.sendcmd('mdtm ' + self.temp_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.mdtm
+    def test_mdtm_enoent(self):
         temp_file_path = self.get_tmp_path()
         with pytest.raises(ftplib.error_perm, match="Could not get file modification time"):
             self.client.sendcmd('mdtm ' + temp_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.mdtm
+    def test_mdtm_notfile(self):
         # make sure we can't use mdtm against directories
         with pytest.raises(ftplib.error_perm, match="Could not get file modification time"):
             self.client.sendcmd('mdtm ' + self.temp_dir_path)
+
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.mdtm
+    def test_mdtm_symlink(self):
+        symlink_name = self.uconfig.get("symlink_file_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        self.client.sendcmd('mdtm ' + symlink_name_path)
 
     @pytest.mark.notsupport
     def test_mfmt(self):
