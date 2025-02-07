@@ -443,27 +443,111 @@ class TestFtpFsOperations(unittest.TestCase):
         symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
         self.client.delete(symlink_name_path)
 
-    def test_rnfr_rnto(self):
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_file(self):
         temp_file_path = self.get_tmp_path()
         self.client.rename(self.temp_file_path, temp_file_path)
         self.client.rename(temp_file_path, self.temp_file_path)
-        # rename dir
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_dir(self):
         temp_dir_path = self.get_tmp_path()
         self.client.rename(self.temp_dir_path, temp_dir_path)
         self.client.rename(temp_dir_path, self.temp_dir_path)
-        # rnfr/rnto over non-existing paths
+
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.rename
+    def test_rnfr_rnto_symlinkdir(self):
+        symlink_name = self.uconfig.get("symlink_dir_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        temp_file_path = self.get_tmp_path()
+        self.client.rename(symlink_name_path, temp_file_path)
+        try:
+            self.client.rename(temp_file_path, symlink_name_path)
+        except Exception as e:
+            pytest.exit("symlink_dir_name nonexist because of rename failed, terminate session")
+
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.rename
+    def test_rnfr_rnto_symlinkfile(self):
+        symlink_name = self.uconfig.get("symlink_file_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        temp_file_path = self.get_tmp_path()
+        self.client.rename(symlink_name_path, temp_file_path)
+        try:
+            self.client.rename(temp_file_path, symlink_name_path)
+        except Exception as e:
+            pytest.exit("symlink_file_name nonexist because of rename failed, terminate session")
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_enoent(self):
+        temp_file_path = self.get_tmp_path()
         with pytest.raises(ftplib.error_perm, match="RNFR command failed"):
             self.client.rename(temp_file_path, self.temp_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_rooted(self):
         with pytest.raises(ftplib.error_perm):
             self.client.rename(self.temp_file_path, '/')
-        # rnto sent without first specifying the source
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnto_only(self):
         with pytest.raises(ftplib.error_perm, match="RNFR required first"):
             self.client.sendcmd('rnto ' + self.temp_file_path)
-        # make sure we can't rename root directory
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_user_rooted(self):
         with pytest.raises(
             ftplib.error_perm, match="Rename failed|Invalid path"
         ):
             self.client.rename(self.get_work_path(), '/x')
+
+    @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_with_xfer(self):
+        data = b'abcde12345' * 100000
+        dummy_sendfile = io.BytesIO()
+        dummy_sendfile.write(data)
+        dummy_sendfile.seek(0)
+        #dummy_recvfile = io.BytesIO()
+        temp_file_path = self.get_tmp_path()
+        temp_file_path2 = self.get_tmp_path()
+        self.client.storbinary("stor " + temp_file_path, dummy_sendfile)
+        do_rename = False
+        def do_rename_function():
+            try:
+                self.client.rename(temp_file_path, temp_file_path2)
+            except Exception as e:
+                if not re.search("226", str(e)):
+                    pytest.fail(str(e))
+
+        with contextlib.closing(self.client.transfercmd("retr " + temp_file_path, None)) as conn:
+            conn.settimeout(GLOBAL_TIMEOUT)
+            while True:
+                data = conn.recv(8192)
+                if not data:
+                    break
+                if not do_rename:
+                    t1 = threading.Thread(target=do_rename_function)
+                    t1.start()
+                    do_rename = True
+        try:
+            self.client.voidresp()
+        except Exception as e:
+            if not re.search("350", str(e)):
+                pytest.fail(str(e))
+        t1.join()
+        self.clean_tmp_file(temp_file_path2)
 
     def test_mdtm(self):
         self.client.sendcmd('mdtm ' + self.temp_file_path)
