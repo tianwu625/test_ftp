@@ -53,20 +53,28 @@ class TestFtpFsOperations(unittest.TestCase):
     def get_work_path(self):
         return self.generate_valid_path(self.work_dir)
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_ok(self):
         share_path = self.get_share_path()
         self.client.cwd(share_path)
         assert os.path.normpath(self.client.pwd()) == share_path
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_enoent(self):
         with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
             subdir_tmp_path = self.get_tmp_path()
             self.client.cwd(subdir_tmp_path)
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_notdir(self):
         with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
             self.client.cwd(self.temp_file_path)
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_symlink_ok(self):
         symlink_name = self.uconfig.get("symlink_dir_name")
         symlink_dst = self.uconfig.get("symlink_dir_dst")
@@ -76,6 +84,8 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.cwd(symlink_name_path)
         assert os.path.normpath(self.client.pwd()) == symlink_dst_path
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
         assert noperm_dir_name != None
@@ -83,6 +93,8 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
             self.client.cwd(noperm_dir_path)
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_symlink_notdir(self):
         symlink_name = self.uconfig.get("symlink_file_name")
         assert symlink_name != None
@@ -90,12 +102,16 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Failed to change directory"):
             self.client.cwd(symlink_name_path)
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_xcwd_ok(self):
         share_path = self.get_share_path()
         cmd = f"xcwd {share_path}"
         self.client.sendcmd(cmd)
         assert os.path.normpath(self.client.pwd()) == share_path
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_longpath(self):
         long_path = "../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../     ../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../..     /../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../     ../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../..     /../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../.     ./../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../../"
         share_path = self.get_share_path()
@@ -104,15 +120,21 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.cwd(long_path)
         assert os.path.normpath(self.client.pwd()) == '/'
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_tilde_ok(self):
         self.client.cwd('~')
         assert os.path.normpath(self.client.pwd()) == self.get_work_path()
 
+    @pytest.mark.base
+    @pytest.mark.cwd
     def test_cwd_tilde_path_ok(self):
         cwd_path = self.generate_valid_path('~', self.share_name, os.path.basename(self.temp_dir_path))
         self.client.cwd(cwd_path)
         assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
 
+    @pytest.mark.base
+    @pytest.mark.pwd
     def test_pwd(self):
         work_path = self.get_work_path()
         assert os.path.normpath(self.client.pwd()) == work_path
@@ -120,6 +142,8 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.cwd(share_path)
         assert os.path.normpath(self.client.pwd()) == share_path
 
+    @pytest.mark.base
+    @pytest.mark.pwd
     def test_xpwd(self):
         work_path = self.get_work_path()
         return_code, current_path = self.client.sendcmd("xpwd").split(" ", 1)
@@ -151,6 +175,8 @@ class TestFtpFsOperations(unittest.TestCase):
         except Exception as e:
             pass
 
+    @pytest.mark.base
+    @pytest.mark.cdup
     def test_cdup_ok(self):
         self.client.cwd(self.temp_dir_path)
         assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
@@ -159,12 +185,16 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.sendcmd('cdup')
         assert self.client.pwd() == os.path.dirname(os.path.dirname(self.temp_dir_path))
 
+    @pytest.mark.base
+    @pytest.mark.cdup
     def test_cdup_rootdirectory(self):
         # make sure we can't escape from root directory
         self.client.cwd('/')
         self.client.sendcmd('cdup')
         assert self.client.pwd() == '/'
 
+    @pytest.mark.base
+    @pytest.mark.cdup
     def test_xcup_ok(self):
         self.client.cwd(self.temp_dir_path)
         assert os.path.normpath(self.client.pwd()) == self.temp_dir_path
@@ -173,16 +203,22 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.sendcmd('xcup')
         assert self.client.pwd() == os.path.dirname(os.path.dirname(self.temp_dir_path))
 
+    @pytest.mark.base
+    @pytest.mark.cdup
     def test_xcup_rootdirectory(self):
         # make sure we can't escape from root directory
         self.client.cwd('/')
         self.client.sendcmd('xcup')
         assert self.client.pwd() == '/'
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_ok(self):
         subpath = self.make_tmp_dir()
         self.clean_tmp_dir(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_exists(self):
         subpath = self.make_tmp_dir()
         # make sure we can't create directories which already exist
@@ -194,6 +230,8 @@ class TestFtpFsOperations(unittest.TestCase):
 
         self.clean_tmp_dir(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_symlink_exist(self):
         symlink_name = self.unconfig.get("symlink_dir_name")
         assert symlink_name != None
@@ -201,22 +239,30 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
             self.client.mkd(symlink_name_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_with_spaces(self):
         spaces_path = self.generate_valid_path(self.work_dir, self.share_name, "dir spaces")
         r_path = self.client.mkd(spaces_path)
         #assert r_path == spaces_path
         self.clean_tmp_dir(spaces_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_not_uft8_with_spaces(self):
         spaces_path = self.generate_valid_path(self.work_dir, self.share_name, "olá çim poi...!#$%#%$>= ü")
         with pytest.raises(ftplib.error_perm, match="Invalid request"):
             r_path = self.client.mkd(spaces_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_rooted(self):
         root_path = self.generate_valid_path("/", "sharename")
         with pytest.raises(ftplib.error_perm, match="Invalid path|Create directory operation failed"):
             self.client.mkd(root_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_with_cwd(self):
         share_path = self.get_share_path()
         self.client.cwd(share_path)
@@ -226,6 +272,8 @@ class TestFtpFsOperations(unittest.TestCase):
         #assert res_path == except_path
         self.clean_tmp_dir(except_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_enoent(self):
         subdirpath = self.get_tmp_path()
         subsubdir = get_tmpfilename()
@@ -233,6 +281,8 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
             self.client.mkd(subsubpath)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
         assert noperm_dir_name != None
@@ -240,43 +290,59 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Create directory opertion failed"):
             self.client.mkd(noperm_subdir_path)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_xmkd_ok(self):
         subpath = self.get_tmp_path()
         dirname = self.client.sendcmd(f'xmkd {subpath}')
         self.clean_tmp_dir(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_digits(self):
         self.client.cwd(self.get_share_path())
         self.client.mkd("00001")
         self.clean_tmp_dir(self.generate_valid_path(self.get_share_path(), "00001"))
 
+    @pytest.mark.base
+    @pytest.mark.mkd
     def test_mkd_embedded_tab(self):
         subpath = self.generate_valid_path(self.get_share_path(), "ab\tcd")
         r_path = self.client.mkd(subpath)
         #assert subpath == r_path
         self.clean_tmp_dir(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_ok(self):
         subpath = self.make_tmp_dir()
         self.client.rmd(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_enoent(self):
         subpath = self.get_tmp_path()
         with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
             self.client.rmd(subpath)
-        # make sure we can't remove the root directory
+
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_rooted(self):
         with pytest.raises(
             ftplib.error_perm, match="Remove directory operation failed|Invalid path"
         ):
             self.client.rmd('/')
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_symlink(self):
         symlink_dst = self.uconfig.get("symlink_rmdir_dst")
         assert symlink_dst != None
         symlink_dst_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_dst)
         self.client.rmd(symlink_dst_path)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
         assert noperm_dir_name != None
@@ -284,10 +350,14 @@ class TestFtpFsOperations(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
             self.client.rmd(noperm_dir_path)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_notdir(self):
         with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
             self.client.rmd(self.temp_file_path)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_notempty(self):
         subpath = self.make_tmp_dir()
         subsubname = get_tmpfilename()
@@ -298,10 +368,14 @@ class TestFtpFsOperations(unittest.TestCase):
         self.clean_tmp_dir(subsubpath)
         self.clean_tmp_dir(subpath)
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_xrmd_ok(self):
         subpath = self.make_tmp_dir()
         self.client.sendcmd(f'xrmd {subpath}')
 
+    @pytest.mark.base
+    @pytest.mark.rmd
     def test_rmd_with_spaces(self):
         subpath = self.generate_valid_path(self.work_dir, self.share_name, "foo bar zoo")
         self.client.mkd(subpath)
