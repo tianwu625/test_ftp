@@ -577,7 +577,6 @@ class TestFtpFsOperations(unittest.TestCase):
         symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
         self.client.sendcmd('mdtm ' + symlink_name_path)
 
-    @pytest.mark.notsupport
     @pytest.mark.base
     @pytest.mark.mfmt
     def test_mfmt_notsupport(self):
@@ -733,6 +732,7 @@ class TestFtpStoreData(unittest.TestCase):
         else:
             return p
 
+    @pytest.mark.base
     def test_stor(self):
         data = b'abcde12345' * 100000
         self.dummy_sendfile.write(data)
@@ -747,11 +747,13 @@ class TestFtpStoreData(unittest.TestCase):
         assert len(data) == len(datafile)
         assert hash(data) == hash(datafile)
 
+    @pytest.mark.base
     def test_stor_active(self):
         # Like test_stor but using PORT
         self.client.set_pasv(False)
         self.test_stor()
 
+    @pytest.mark.base
     def test_stor_ascii(self):
         # Test STOR in ASCII mode
 
@@ -781,7 +783,8 @@ class TestFtpStoreData(unittest.TestCase):
         assert len(expected) == len(datafile)
         assert hash(expected) == hash(datafile)
 
-    @pytest.mark.notsupport
+    @pytest.mark.base
+    @pytest.mark.stou
     def test_stou(self):
         self.client.set_pasv(True)
         self.client.voidcmd('TYPE I')
@@ -852,6 +855,7 @@ class TestFtpStoreData(unittest.TestCase):
                 assert not file.startswith(self.testfn)
 
     '''
+    @pytest.mark.base
     def test_appe(self):
         data1 = b'abcde12345' * 100000
         self.dummy_sendfile.write(data1)
@@ -872,6 +876,7 @@ class TestFtpStoreData(unittest.TestCase):
         assert len(data1 + data2) == len(datafile)
         assert hash(data1 + data2) == hash(datafile)
 
+    @pytest.mark.base
     def test_appe_rest(self):
         # Watch for APPE preceded by REST, which makes no sense.
         self.client.sendcmd('type i')
@@ -879,6 +884,7 @@ class TestFtpStoreData(unittest.TestCase):
         with pytest.raises(ftplib.error_temp, match="Use PORT or PASV first"):
             self.client.sendcmd('appe x')
 
+    @pytest.mark.base
     def test_rest_on_stor(self):
         # Test STOR preceded by REST.
         data = b'abcde12345' * 100000
@@ -938,6 +944,7 @@ class TestFtpStoreData(unittest.TestCase):
         self.dummy_sendfile.seek(0)
         self.client.storbinary('stor ' + self.temp_file_path, self.dummy_sendfile)
     '''
+    @pytest.mark.base
     def test_quit_during_transfer(self):
         # RFC-959 states that if QUIT is sent while a transfer is in
         # progress, the connection must remain open for result response
@@ -970,6 +977,7 @@ class TestFtpStoreData(unittest.TestCase):
         #reconnect ftp server for clean
         self.make_client()
 
+    @pytest.mark.base
     def test_stor_empty_file(self):
         self.temp_file_path = self.get_tmp_file_path()
         self.client.storbinary('stor ' + self.temp_file_path, self.dummy_sendfile)
@@ -1027,6 +1035,7 @@ class TestFtpRetrieveData(unittest.TestCase):
         else:
             return p
 
+    @pytest.mark.base
     def test_retr(self):
         data = b'abcde12345' * 100000
         self.dummy_sendfile.write(data)
@@ -1044,6 +1053,7 @@ class TestFtpRetrieveData(unittest.TestCase):
         with pytest.raises(ftplib.error_perm, match="Failed to open file"):
             self.client.retrbinary("retr " + bogus, self.dummy_recvfile.write)
 
+    @pytest.mark.base
     def test_retr_ascii(self):
         # Test RETR in ASCII mode.
         data = (b'abcde12345' + bytes(os.linesep, "ascii")) * 100000
@@ -1058,6 +1068,7 @@ class TestFtpRetrieveData(unittest.TestCase):
         assert len(expected) == len(datafile)
         assert hash(expected) == hash(datafile)
 
+    @pytest.mark.base
     def test_retr_ascii_already_crlf(self):
         # Test ASCII mode RETR for data with CRLF line endings.
         data = b'abcde12345\r\n' * 100000
@@ -1071,6 +1082,7 @@ class TestFtpRetrieveData(unittest.TestCase):
         assert len(data) == len(datafile)
         assert hash(data) == hash(datafile)
 
+    @pytest.mark.base
     def test_restore_on_retr(self):
         data = b'abcde12345' * 1000000
         self.dummy_sendfile.write(data)
@@ -1113,9 +1125,250 @@ class TestFtpRetrieveData(unittest.TestCase):
         assert len(data) == len(datafile)
         assert hash(data) == hash(datafile)
 
+    @pytest.mark.base
     def test_retr_empty_file(self):
         self.temp_file_path = self.get_tmp_file_path()
         self.client.storbinary("stor " + self.temp_file_path, self.dummy_sendfile)
         self.client.retrbinary("retr " + self.temp_file_path, self.dummy_recvfile.write)
         self.dummy_recvfile.seek(0)
         assert self.dummy_recvfile.read() == b""
+
+class TestFtpnonFsOperations(unittest.TestCase):
+    """Test: TYPE, STRU, MODE, NOOP, SYST, ALLO, HELP, SITE HELP."""
+    client_class = ftplib.FTP
+    def setUp(self):
+        super().setUp()
+        server_host = self.uconfig.get('server_host')
+        server_port = self.uconfig.get('server_port', 21)
+        server_user = self.uconfig.get('server_user')
+        server_password = self.uconfig.get('server_password')
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        assert(server_host != None and server_user != None and server_password != None)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(server_host, server_port)
+        self.client.login(server_user,server_password)
+        self.work_dir = self.uconfig.get('work_dir')
+        self.share_name = self.uconfig.get('share_name')
+
+    def tearDown(self):
+        self.client.close()
+        super().tearDown()
+
+    @pytest.mark.base
+    @pytest.mark.type
+    def test_type_acsii(self):
+        return_code, return_message = self.client.sendcmd('type a').split(" ", 1)
+        assert return_code == "200" and re.search("Switching to ASCII mode", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.type
+    def test_type_binary(self):
+        return_code, return_message = self.client.sendcmd('type i').split(" ", 1)
+        assert return_code == "200" and re.search("Switching to Binary mode", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.type
+    def test_type_unkown(self):
+        with pytest.raises(ftplib.error_perm, match="Unrecognised TYPE command"):
+            self.client.sendcmd('type ?!?')
+
+    @pytest.mark.base
+    @pytest.mark.stru
+    def test_stru_file(self):
+        return_code, return_message = self.client.sendcmd('stru f').split(" ", 1)
+        assert return_code == "200" and re.search("Structure set to F", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.stru
+    def test_stru_record(self):
+        with pytest.raises(ftplib.error_perm, match="Bad STRU command"):
+            self.client.sendcmd('stru r')
+
+    @pytest.mark.base
+    @pytest.mark.stru
+    def test_stru_page(self):
+        with pytest.raises(ftplib.error_perm, match="Bad STRU command"):
+            self.client.sendcmd('stru p')
+
+    @pytest.mark.base
+    @pytest.mark.stru
+    def test_stru_unkown(self):
+        with pytest.raises(ftplib.error_perm, match="Bad STRU command"):
+            self.client.sendcmd('stru ?!?')
+
+    @pytest.mark.base
+    @pytest.mark.mode
+    def test_mode_stream(self):
+        return_code, return_message = self.client.sendcmd('mode s').split(" ", 1)
+        assert return_code == "200" and re.search("Mode set to S", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.mode
+    def test_mode_block(self):
+        with pytest.raises(ftplib.error_perm, match="Bad MODE command"):
+            self.client.sendcmd('mode b')
+
+    @pytest.mark.base
+    @pytest.mark.mode
+    def test_mode_compress(self):
+        with pytest.raises(ftplib.error_perm, match="Bad MODE command"):
+            self.client.sendcmd("mode c")
+
+    @pytest.mark.base
+    @pytest.mark.mode
+    def test_mode_unkown(self):
+        with pytest.raises(ftplib.error_perm, match="Bad MODE command"):
+            self.client.sendcmd('mode ?!?')
+
+    @pytest.mark.base
+    @pytest.mark.noop
+    def test_noop_ok(self):
+        return_code, return_message = self.client.sendcmd('noop').split(" ", 1)
+        assert return_code == "200" and re.search("NOOP ok", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.syst
+    def test_syst_ok(self):
+        return_code, return_message = self.client.sendcmd('syst').split(" ", 1)
+        assert return_code == "215" and re.search("UNIX Type: L8", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.allo
+    def test_allo_ok(self):
+        return_code, return_message = self.client.sendcmd('allo 8192').split(" ", 1)
+        assert return_code == "202" and re.search("ALLO command ignored", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.allo
+    def test_allo_unkown(self):
+        try:
+            return_code, return_message = self.client.sendcmd('allo x').split(" ", 1)
+            assert return_code == "202" and re.search("ALLO command ignored", return_message) != None
+        except Exception as e:
+            if not isinstance(e, ftplib.error_perm):
+                raise e
+    @pytest.mark.base
+    @pytest.mark.quit
+    def test_quit_ok(self):
+        return_code, return_message = self.client.sendcmd('quit').split(" ", 1)
+        assert return_code == "221" and re.search("Goodbye", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.help
+    def test_help_ok(self):
+        return_message = self.client.sendcmd('help')
+        assert re.search("214 Help OK", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.site
+    def test_site_invalid(self):
+        with pytest.raises(ftplib.error_perm, match="Unknown SITE command"):
+            self.client.sendcmd('site')
+
+    @pytest.mark.base
+    @pytest.mark.site
+    def test_site_unkown(self):
+        with pytest.raises(ftplib.error_perm, match="Unknown SITE command"):
+            self.client.sendcmd('site ?!?')
+
+    @pytest.mark.base
+    @pytest.mark.site_help
+    def test_site_help_ok(self):
+        return_code, return_message = self.client.sendcmd('site help').split(" ", 1)
+        assert return_code == "214" and re.search("HELP", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.site_help
+    def test_site_help_help(self):
+        return_code, return_message = self.client.sendcmd('site help help').split(" ", 1)
+        assert return_code == "214" and re.search("HELP", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.site_help
+    def test_site_help_unkown(self):
+        return_code, return_message = self.client.sendcmd('site help ?!?').split(" ", 1)
+        assert return_code == "214" and re.search("HELP", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.rest
+    def test_rest_ok(self):
+        self.client.sendcmd('type i')
+        return_code, return_message = self.client.sendcmd('rest 1024').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(1024\)", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.rest
+    @pytest.mark.should_fail
+    def test_rest_invalid(self):
+        self.client.sendcmd('type i')
+        return_code, return_message = self.client.sendcmd('rest').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(0\)", return_message)
+
+        return_code, return_message = self.client.sendcmd('rest str').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(0\)", return_message)
+
+        return_code, return_message = self.client.sendcmd('rest ?!?').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(0\)", return_message)
+
+        return_code, return_message = self.client.sendcmd('rest -1').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(0\)", return_message)
+
+        return_code, return_message = self.client.sendcmd('rest 10.1').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(0\)", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.rest
+    @pytest.mark.should_fail
+    def test_rest_ascii(self):
+        self.client.sendcmd('type a')
+
+        return_code, return_message = self.client.sendcmd('rest 1024').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \(1024\)", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.rest
+    def test_rest_2gb(self):
+        self.client.sendcmd('type i')
+        test_len = (2 ** 31) + 24
+        return_code, return_message = self.client.sendcmd(f'rest {test_len - 1}').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \({}\)".format(test_len-1), return_message)
+
+    @pytest.mark.base
+    @pytest.mark.rest
+    def test_rest_4gb(self):
+        self.client.sendcmd('type i')
+        test_len = (2 ** 32) + 24
+        return_code, return_message = self.client.sendcmd(f'rest {test_len - 1}').split(" ", 1)
+        assert return_code == "350" and re.search(r"Restart position accepted \({}\)".format(test_len-1), return_message)
+
+    @pytest.mark.base
+    @pytest.mark.feat
+    def test_feat_ok(self):
+        return_message = self.client.sendcmd('feat')
+        assert re.search("211-Features", return_message) != None and re.search("211 End", return_message) != None and \
+                re.search("TVFS", return_message) != None and re.search("UTF8", return_message) != None
+
+    @pytest.mark.base
+    @pytest.mark.opts
+    def test_opts_utf8(self):
+        return_code, return_message = self.client.sendcmd('opts utf8 on').split(" ", 1)
+        assert return_code == "200" and re.search("Always in UTF8 mode", return_message)
+
+    @pytest.mark.base
+    @pytest.mark.opts
+    def test_opts_prot(self):
+        with pytest.raises(ftplib.error_perm, match="Option not understood"):
+            self.client.sendcmd('opts prot p')
+
+    @pytest.mark.base
+    @pytest.mark.opts
+    def test_opts_ccc(self):
+        with pytest.raises(ftplib.error_perm, match="Option not understood"):
+            self.client.sendcmd('opts ccc')
+
+    @pytest.mark.base
+    @pytest.mark.opts
+    def test_opts_noop(self):
+        with pytest.raises(ftplib.error_perm, match="Option not understood"):
+            self.client.sendcmd('opts noop')
+
