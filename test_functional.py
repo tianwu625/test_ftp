@@ -618,12 +618,77 @@ class TestFtpFsOperations(unittest.TestCase):
     '''
 
     @pytest.mark.eftp
-    def test_size(self):
+    @pytest.mark.base
+    @pytest.mark.size
+    def test_size_ok(self):
         s = self.client.size(self.temp_file_path)
         assert s == 0
-        # make sure we can't use size against directories
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.size
+    def test_size_notfile(self):
         with pytest.raises(ftplib.error_perm, match="Could not get file size"):
             self.client.sendcmd('size ' + self.temp_dir_path)
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.size
+    def test_size_symlink_ok(self):
+        symlink_name = self.uconfig.get("symlink_file_name")
+        assert symlink_name != None
+        symlink_name_size = self.uconfig.get("symlink_file_size")
+        assert symlink_name_size != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        s = self.client.size(symlink_name_path)
+        assert s == symlink_name_size
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.size
+    def test_size_symlink_dir(self):
+        symlink_name = self.uconfig.get("symlink_dir_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        with pytest.raises(ftplib.error_perm, match="Could not get file size"):
+            self.client.size(symlink_name_path)
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.size
+    def test_size_ascii(self):
+        data = b'abcde12345\r\n' * 100000
+        dummy_sendfile = io.BytesIO()
+        dummy_sendfile.write(data)
+        dummy_sendfile.seek(0)
+        temp_file_path = self.get_tmp_path()
+        self.client.storlines('stor ' + temp_file_path, dummy_sendfile)
+        self.client.sendcmd('type a')
+        s = self.client.size(temp_file_path)
+        expect = data.replace(b'\r\n', bytes(os.linesep, "ascii"))
+        assert s == len(expect)
+        self.clean_tmp_file(temp_file_path)
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.size
+    def test_size_enoent(self):
+        temp_file_path = self.get_tmp_path()
+        with pytest.raises(ftplib.error_perm, match="Could not get file size"):
+            self.client.size(temp_file_path)
+
+    @pytest.mark.eftp
+    @pytest.mark.base
+    @pytest.mark.perm
+    @pytest.mark.size
+    def test_size_eperm(self):
+        noperm_file_name = self.uconfig.get("noperm_file_name")
+        assert noperm_file_name != None
+        noperm_file_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_file_name)
+        with pytest.raises(ftplib.error_perm, match="Could not get file size"):
+            self.client.size(noperm_file_path)
 
 class TestFtpStoreData(unittest.TestCase):
     """Test STOR, STOU, APPE, REST, TYPE."""
