@@ -7,6 +7,7 @@ import io
 import contextlib
 import threading
 import re
+import socket
 
 from . import GLOBAL_TIMEOUT, BUFSIZE, INTERRUPTED_TRANSF_SIZE
 from . import get_tmpfilename
@@ -1371,4 +1372,376 @@ class TestFtpnonFsOperations(unittest.TestCase):
     def test_opts_noop(self):
         with pytest.raises(ftplib.error_perm, match="Option not understood"):
             self.client.sendcmd('opts noop')
+
+    @pytest.mark.base
+    @pytest.mark.rein
+    def test_rein_not_support(self):
+        with pytest.raises(ftplib.error_perm, match="REIN not implemented"):
+            self.client.sendcmd('rein')
+
+
+class TestFtpCmdsSemantic(unittest.TestCase):
+    client_class = ftplib.FTP
+    arg_cmds = [
+        'appe',
+        'dele',
+        'eprt',
+        'mdtm',
+        'mfmt',
+        'mkd',
+        'mode',
+        'opts',
+        'port',
+        'rest',
+        'retr',
+        'rmd',
+        'rnfr',
+        'rnto',
+        'site chmod',
+        'site',
+        'size',
+        'stor',
+        'stru',
+        'type',
+        'user',
+        'xmkd',
+        'xrmd',
+    ]
+    all_cmds = [
+        'abor',
+        'allo',
+        'appe',
+        'cdup',
+        'cwd',
+        'dele',
+        'eprt',
+        'epsv',
+        'feat',
+        'help',
+        'list',
+        'mdtm',
+        'mfmt',
+        'mlsd',
+        'mlst',
+        'mode',
+        'mkd',
+        'nlst',
+        'noop',
+        'opts',
+        'pass',
+        'pasv',
+        'port',
+        'pwd',
+        'quit',
+        'rein',
+        'rest',
+        'retr',
+        'rmd',
+        'rnfr',
+        'rnto',
+        'site',
+        'site help',
+        'site chmod',
+        'size',
+        'stat',
+        'stor',
+        'stou',
+        'stru',
+        'syst',
+        'type',
+        'user',
+        'xcup',
+        'xcwd',
+        'xmkd',
+        'xpwd',
+        'xrmd'
+    ]
+
+    def setUp(self):
+        super().setUp()
+        server_host = self.uconfig.get('server_host')
+        server_port = self.uconfig.get('server_port', 21)
+        server_user = self.uconfig.get('server_user')
+        server_password = self.uconfig.get('server_password')
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        assert(server_host != None and server_user != None and server_password != None)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(server_host, server_port)
+        self.client.login(server_user,server_password)
+        self.work_dir = self.uconfig.get('work_dir')
+        self.share_name = self.uconfig.get('share_name')
+
+    def tearDown(self):
+        self.client.close()
+        super().tearDown()
+
+    def connect_and_not_login(self, quit_first = True):
+        if quit_first:
+            self.client.quit()
+        server_host = self.uconfig.get('server_host')
+        server_port = self.uconfig.get('server_port', 21)
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(server_host, server_port)
+
+    @pytest.mark.base
+    def test_auth_cmds(self):
+        # Test those commands requiring client to be authenticated.
+        expected = "530 Please login with USER and PASS.|530 Login with USER and PASS please."
+        self.connect_and_not_login()
+        for cmd in self.all_cmds:
+            if cmd in (
+                'feat',
+                'user',
+                'pass',
+                'quit',
+                'site',
+                'pbsz',
+                'auth',
+                'prot',
+                'ccc',
+                'opts',
+            ):
+                continue
+            if cmd in self.arg_cmds:
+                cmd += ' arg'
+            self.client.putcmd(cmd)
+            resp = self.client.getmultiline()
+            assert re.search(expected, resp) != None
+
+    @pytest.mark.base
+    def test_noauth_cmds(self):
+        self.connect_and_not_login()
+        for cmd in ('feat',):
+            self.client.sendcmd(cmd)
+
+class TestNetWorkProtocols(unittest.TestCase):
+    client_class = ftplib.FTP
+    def setUp(self):
+        super().setUp()
+        self.server_host = self.uconfig.get('server_host')
+        self.server_port = self.uconfig.get('server_port', 21)
+        server_user = self.uconfig.get('server_user')
+        server_password = self.uconfig.get('server_password')
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        assert(self.server_host != None and server_user != None and server_password != None)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(self.server_host)
+        self.client.login(server_user, server_password)
+        if self.client.af == socket.AF_INET:
+            self.proto = "1"
+            self.other_proto = "2"
+        else:
+            self.proto = "2"
+            self.other_proto = "1"
+
+    def tearDown(self):
+        self.client.close()
+        super().tearDown()
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_vertical_line_4(self):
+        # len('|') > 3
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT protocol"):
+            self.client.sendcmd('eprt ||||')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_vertical_line_2(self):
+        # len('|') < 3
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT protocol"):
+            self.client.sendcmd('eprt ||')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_port_65536(self):
+        # port > 65535
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT command"):
+            self.client.sendcmd(f'eprt |{self.proto}|{self.server_host}|65536|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_port_negative(self):
+        # port = -1
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT command"):
+            self.client.sendcmd(f'eprt |{self.proto}|{self.server_host}|-1|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_port_le_1024(self):
+        msg = "500 Illegal EPRT command."
+        cmd = f'eprt |{self.proto}|{self.server_host}|888|'
+        try:
+            resp = self.client.sendcmd(cmd)
+            re.search("200 EPRT command successful", resp) != None
+        except ftplib.error_perm as e:
+            assert re.search(msg, str(e))
+        except Exception as e:
+            raise e
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_proto_3(self):
+        with pytest.raises(ftplib.error_perm):
+            self.client.sendcmd(f'eprt |3|{self.server_host}|888|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_ip_ge_4(self):
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT command"):
+            self.client.sendcmd(f'eprt |1|1.2.3.4.5|2048|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_ip_ge_255(self):
+        with pytest.raises(ftplib.error_perm, match="Bad EPRT command"):
+            self.client.sendcmd(f'eprt |1|1.2.3.256|2048|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_proto_not_match(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal EPRT command|Bad EPRT protocol"):
+            self.client.sendcmd(f'eprt |2|1.2.3.255|2048|')
+
+    @pytest.mark.base
+    @pytest.mark.eprt
+    def test_eprt_connection(self):
+        with contextlib.closing(socket.socket(self.client.af)) as sock:
+            sock.bind((self.client.sock.getsockname()[0], 0))
+            sock.listen(5)
+            sock.settimeout(GLOBAL_TIMEOUT)
+            ip, port = sock.getsockname()[:2]
+            self.client.set_pasv(False)
+            resp = self.client.sendcmd(f'eprt |{self.proto}|{ip}|{port}|')
+            try:
+                s = sock.accept()
+                s[0].close()
+            except socket.timeout:
+                self.fail("Server didn't connect to passive socket")
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_connect(self):
+        with contextlib.closing(self.client.makeport()):
+            self.client.sendcmd('abor')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_sep_not_comma(self):
+        local_ip = self.client.sock.getsockname()[0]
+        comma_ip = ','.join(local_ip.split('.'))
+        #port is 12345
+        comma_port = '48.57'
+        port_arg = comma_ip + ',' + comma_ip
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd(f'port {port_arg}')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_ip_not_int(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port X,0,0,1,48,57')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_len_7(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port 127,0,0,1,1,1,1')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_len_5(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port 127,0,0,1,1')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_ip_256(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port 256,0,0,1,1,1')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_port_65536(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port 127,0,0,1,256,1')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_port_negative(self):
+        with pytest.raises(ftplib.error_perm, match="Illegal PORT command"):
+            self.client.sendcmd('port 127,0,0,1,-1,0')
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_port_le_1024(self):
+        msg = "500 Illegal EPRT command."
+        try:
+            port_arg = ','.join(self.client.sock.getsockname()[0].split('.') + ['1', '1'])
+            resp = self.client.sendcmd(f'port {port_arg}')
+            re.search("200 EPRT command successful", resp) != None
+        except ftplib.error_perm as e:
+            assert re.search(msg, str(e))
+        except Exception as e:
+            raise e
+
+    @pytest.mark.base
+    @pytest.mark.port
+    def test_port_ok(self):
+        #port is 12345
+        port_arg = ','.join(self.client.sock.getsockname()[0].split('.') + ['48', '57'])
+        resp = self.client.sendcmd(f'port {port_arg}')
+        assert re.search('200', resp) != None
+
+    @pytest.mark.base
+    @pytest.mark.epsv
+    @pytest.mark.should_fail
+    def test_epsv_other_proto(self):
+        try:
+            resp = self.client.sendcmd('epsv ' + self.other_proto)
+            re.search("229", resp)
+        except ftplib.error_perm as e:
+            re.search("Bad network protocol", str(e))
+        except Exception as e:
+            raise e
+
+    @pytest.mark.base
+    @pytest.mark.epsv
+    def test_epsv_invalid_proto(self):
+        with pytest.raises(ftplib.error_perm):
+            self.client.sendcmd('epsv 3')
+
+    @pytest.mark.base
+    @pytest.mark.epsv
+    def test_epsv_connect(self):
+        for cmd in ('EPSV', 'EPSV ' + self.proto):
+            host, port = ftplib.parse229(
+                    self.client.sendcmd(cmd), self.client.sock.getpeername())
+            with contextlib.closing(
+                    socket.socket(self.client.af, socket.SOCK_STREAM)
+                    ) as s:
+                s.settimeout(GLOBAL_TIMEOUT)
+                s.connect((host, port))
+                self.client.sendcmd('abor')
+
+    @pytest.mark.base
+    @pytest.mark.epsv
+    def test_epsv_all(self):
+        self.client.sendcmd('epsv all')
+        with pytest.raises(ftplib.error_perm):
+            self.client.sendcmd('pasv')
+        with pytest.raises(ftplib.error_perm):
+            self.client.sendport(self.server_host, 2000)
+
+    @pytest.mark.base
+    @pytest.mark.pasv
+    def test_pasv_connect(self):
+        host, port = ftplib.parse227(self.client.sendcmd('pasv'))
+        with contextlib.closing(
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ) as s:
+            s.settimeout(GLOBAL_TIMEOUT)
+            s.connect((host, port))
+            self.client.sendcmd('abor')
 
