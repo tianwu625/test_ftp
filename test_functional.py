@@ -548,6 +548,7 @@ class TestFtpFsOperations(unittest.TestCase):
             if not re.search("350", str(e)):
                 pytest.fail(str(e))
         t1.join()
+        dummy_sendfile.close()
         self.clean_tmp_file(temp_file_path2)
 
     @pytest.mark.base
@@ -669,6 +670,7 @@ class TestFtpFsOperations(unittest.TestCase):
         s = self.client.size(temp_file_path)
         expect = data.replace(b'\r\n', bytes(os.linesep, "ascii"))
         assert s == len(expect)
+        dummy_sendfile.close()
         self.clean_tmp_file(temp_file_path)
 
     @pytest.mark.eftp
@@ -1745,3 +1747,265 @@ class TestNetWorkProtocols(unittest.TestCase):
             s.connect((host, port))
             self.client.sendcmd('abor')
 
+class TestFtpAbort(unittest.TestCase):
+    client_class = ftplib.FTP
+    def setUp(self):
+        super().setUp()
+        server_host = self.uconfig.get('server_host')
+        server_port = self.uconfig.get('server_port', 21)
+        server_user = self.uconfig.get('server_user')
+        server_password = self.uconfig.get('server_password')
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        assert(server_host != None and server_user != None and server_password != None)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(server_host, server_port)
+        self.client.login(server_user,server_password)
+        self.work_dir = self.uconfig.get('work_dir')
+        self.share_name = self.uconfig.get('share_name')
+
+    def tearDown(self):
+        self.client.close()
+        super().tearDown()
+
+    @pytest.mark.base
+    @pytest.mark.abor
+    def test_abor_no_data(self):
+        resp = self.client.sendcmd('ABOR')
+        assert resp == '225 No transfer to ABOR.'
+        resp = self.client.retrlines('list', [].append)
+
+    @pytest.mark.base
+    @pytest.mark.abor
+    def tset_abor_pasv(self):
+        self.client.makepasv()
+        respcode = self.client.sendcmd('ABOR')[:3]
+        assert respcode == '225'
+        self.client.retrlines('list', [].append)
+
+    @pytest.mark.base
+    @pytest.mark.abor
+    def test_abor_port(self):
+        # Case 3: data channel opened with PASV or PORT, but ABOR sent
+        # before a data transfer has been started: close data channel,
+        # respond with 225
+        self.client.set_pasv(0)
+        with contextlib.closing(self.client.makeport()):
+            respcode = self.client.sendcmd('ABOR')[:3]
+        assert respcode == '225'
+        self.client.retrlines('list', [].append)
+
+    def get_tmp_file_path(self):
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        if p.startswith('//'):
+            return p.replace('//', '/')
+        else:
+            return p
+
+    @pytest.mark.base
+    @pytest.mark.abor
+    def test_abor_during_transfer(self):
+        # Case 4: ABOR while a data transfer on DTP channel is in
+        # progress: close data channel, respond with 426, respond
+        # with 226.
+        data = b'abcde12345' * 1000000
+        dummy_sendfile = io.BytesIO()
+        dummy_sendfile.write(data)
+        dummy_sendfile.seek(0)
+        temp_file_path = self.get_tmp_file_path()
+        self.client.storbinary('stor ' + temp_file_path, dummy_sendfile)
+        self.client.voidcmd('TYPE I')
+        def do_abort_function():
+            self.client.putcmd('ABOR')
+            assert self.client.getline()[:3] == "426"
+            assert self.client.voidresp()[:3] == '225'
+
+        with contextlib.closing(
+            self.client.transfercmd('retr ' + temp_file_path)
+        ) as conn:
+            bytes_recv = 0
+            while bytes_recv < 65536:
+                chunk = conn.recv(BUFSIZE)
+                bytes_recv += len(chunk)
+
+            t1 = threading.Thread(target=do_abort_function)
+            t1.start()
+            time.sleep(3)
+
+        t1.join()
+        dummy_sendfile.close()
+
+class TestFtpListingCmds(unittest.TestCase):
+    """Test LIST, NLST, argumented STAT."""
+
+    client_class = ftplib.FTP
+
+    def setUp(self):
+        super().setUp()
+        server_host = self.uconfig.get('server_host')
+        server_port = self.uconfig.get('server_port', 21)
+        server_user = self.uconfig.get('server_user')
+        server_password = self.uconfig.get('server_password')
+        timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
+        assert(server_host != None and server_user != None and server_password != None)
+        self.client = self.client_class(timeout=timeout)
+        self.client.connect(server_host, server_port)
+        self.client.login(server_user,server_password)
+        self.work_dir = self.uconfig.get('work_dir')
+        self.share_name = self.uconfig.get('share_name')
+        self.temp_dir_path = self.make_tmp_dir()
+        self.temp_file_path = self.make_tmp_file()
+
+    def tearDown(self):
+        self.clean_tmp_dir(self.temp_dir_path)
+        self.clean_tmp_file(self.temp_file_path)
+        self.client.close()
+        super().tearDown()
+
+    def make_tmp_dir(self):
+        subpath = self.get_tmp_path()
+        dirname = self.client.mkd(subpath)
+        #assert dirname == subpath
+        return subpath
+
+    def clean_tmp_dir(self, subpath):
+        try:
+            self.client.rmd(subpath)
+        except Exception as e:
+            pass
+
+    def make_tmp_file(self):
+        tmpfile = get_tmpfilename()
+        tmp_path = self.get_tmp_path(tmpfile)
+        touch_filename(tmpfile)
+        with open(tmpfile, 'rb') as f:
+            self.client.storbinary('stor ' + tmp_path, f)
+        os.remove(tmpfile)
+        return tmp_path
+
+    def clean_tmp_file(self, subpath):
+        try:
+            self.client.delete(subpath)
+        except Exception as e:
+            pass
+
+    def generate_valid_path(self, *args):
+        p = os.path.normpath('/'.join(args))
+        if p.startswith('//'):
+            return p.replace('//', '/')
+        else:
+            return p
+
+    def get_share_path(self):
+        return self.generate_valid_path(self.work_dir, self.share_name)
+
+    def get_work_path(self):
+        return self.generate_valid_path(self.work_dir)
+
+    def get_tmp_path(self, tmp_file=None):
+        if tmp_file == None:
+            tmp_file = get_tmpfilename()
+        return self.generate_valid_path(self.work_dir, self.share_name, tmp_file)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_ok(self):
+        subpaths = self.client.nlst(self.get_share_path())
+        print(subpaths)
+        assert self.temp_dir_path in subpaths and self.temp_file_path in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    @pytest.mark.should_fail
+    def test_nlst_enoent(self):
+        temp_dir_path = self.get_tmp_path()
+        subpaths = self.client.nlst(temp_dir_path)
+        assert subpaths == []
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_subsub(self):
+        subsubname = get_tmpfilename()
+        subsubpath = self.generate_valid_path(self.temp_dir_path, subsubname)
+        self.client.mkd(subsubpath)
+        subpaths = self.client.nlst(self.temp_dir_path)
+        assert subsubpath in subpaths
+        self.clean_tmp_dir(subsubpath)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_ok(self):
+        subpaths = []
+        self.client.retrlines('list ' + self.get_share_path(), subpaths.append)
+        subpaths = [x.split(" ")[-1] for x in subpaths]
+        assert os.path.basename(self.temp_dir_path) in subpaths and os.path.basename(self.temp_file_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_enoent(self):
+        temp_dir_path = self.get_tmp_path()
+        subpaths = []
+        resp = self.client.retrlines('list ' + temp_dir_path, subpaths.append)
+        assert subpaths == []
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_subsub(self):
+        subsubname = get_tmpfilename()
+        subsubpath = self.generate_valid_path(self.temp_dir_path, subsubname)
+        self.client.mkd(subsubpath)
+        subpaths = []
+        self.client.retrlines('list ' + self.temp_dir_path, subpaths.append)
+        subpaths = [x.split(" ")[-1] for x in subpaths]
+        assert subsubname in subpaths
+        self.clean_tmp_dir(subsubpath)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_with_arguments(self):
+        l1 = l2 = l3 = l4 = l5 = []
+        self.client.retrlines('list ' + self.get_share_path(), l1.append)
+        self.client.retrlines('list -a ' + self.get_share_path(), l2.append)
+        self.client.retrlines('list -l ' + self.get_share_path(), l3.append)
+        self.client.retrlines('list -al ' + self.get_share_path(), l4.append)
+        self.client.retrlines('list -la ' + self.get_share_path(), l5.append)
+        assert l1 == l2 == l3 == l4 == l5
+        subpaths = [x.split(" ")[-1] for x in l1]
+        assert os.path.basename(self.temp_dir_path) in subpaths and os.path.basename(self.temp_file_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_mlst_not_support(self):
+        with pytest.raises(ftplib.error_perm, match="Unknown command"):
+            self.client.voidcmd('mlst ' + self.get_share_path())
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_mlsd_not_support(self):
+        with pytest.raises(ftplib.error_perm, match="Unknown command"):
+            self.client.retrlines('mlsd '+ self.get_share_path(), ['type', 'size', 'perm', 'modify'])
+
+    @pytest.mark.base
+    @pytest.mark.stat
+    def test_stat_dir_ok(self):
+        resp = self.client.sendcmd('stat ' + self.get_share_path())
+        subpaths = [x.split(" ")[-1] for x in resp.split("\n")[1:-1]] 
+        assert os.path.basename(self.temp_dir_path) in subpaths and os.path.basename(self.temp_file_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.stat
+    def test_stat_file_ok(self):
+        resp = self.client.sendcmd('stat ' + self.temp_file_path)
+        assert os.path.basename(self.temp_file_path) in [x.split(" ")[-1] for x in resp.split("\n")[1:-1]]
+
+    @pytest.mark.base
+    @pytest.mark.stat
+    def test_stat_enoent(self):
+        temp_dir_path = self.get_tmp_path()
+        resp = self.client.sendcmd('stat ' + temp_dir_path)
+        assert [] == [x for x in resp.split("\n")[1:-1]] 
+
+    @pytest.mark.base
+    @pytest.mark.stat
+    def test_stat_wildcard(self):
+        resp = self.client.sendcmd('stat *')
+        assert [] != [x for x in resp.split("\n")[1:-1]]
