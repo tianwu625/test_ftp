@@ -9,7 +9,7 @@ import threading
 import re
 import socket
 
-from . import GLOBAL_TIMEOUT, BUFSIZE, INTERRUPTED_TRANSF_SIZE
+from . import GLOBAL_TIMEOUT, BUFSIZE, INTERRUPTED_TRANSF_SIZE, TEST_PREFIX
 from . import get_tmpfilename
 from . import touch_filename
 
@@ -1873,13 +1873,16 @@ class TestFtpListingCmds(unittest.TestCase):
         except Exception as e:
             pass
 
-    def make_tmp_file(self):
+    def upload_empty_file(self, tmp_path):
         tmpfile = get_tmpfilename()
-        tmp_path = self.get_tmp_path(tmpfile)
         touch_filename(tmpfile)
         with open(tmpfile, 'rb') as f:
             self.client.storbinary('stor ' + tmp_path, f)
         os.remove(tmpfile)
+
+    def make_tmp_file(self):
+        tmp_path = self.get_tmp_path()
+        self.upload_empty_file(tmp_path)
         return tmp_path
 
     def clean_tmp_file(self, subpath):
@@ -1910,8 +1913,61 @@ class TestFtpListingCmds(unittest.TestCase):
     @pytest.mark.list
     def test_nlst_ok(self):
         subpaths = self.client.nlst(self.get_share_path())
-        print(subpaths)
         assert self.temp_dir_path in subpaths and self.temp_file_path in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.symlink
+    @pytest.mark.list
+    def test_nlst_symlink(self):
+        symlink_name = self.uconfig.get("symlink_dir_name")
+        assert symlink_name != None
+        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
+        self.client.nlst(symlink_name_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_no_path(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = self.client.nlst()
+        assert os.path.basename(self.temp_file_path) in subpaths and os.path.basename(self.temp_dir_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_glob_file(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = self.client.nlst(f'{TEST_PREFIX}*')
+        assert os.path.basename(self.temp_file_path) in subpaths and os.path.basename(self.temp_dir_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    @pytest.mark.should_fail
+    def test_nlst_glob_enoent(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = self.client.nlst('foo*')
+        assert subpaths == []
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_glob_more_than_9999(self):
+        clean_list = []
+        for x in range(14998):
+            temp_path = self.make_tmp_file()
+            clean_list.append(temp_path)
+        self.client.cwd(self.get_share_path())
+        subpaths = self.client.nlst(f'{TEST_PREFIX}*')
+        assert len(subpaths) == 15000
+        for temp_path in clean_list:
+            self.clean_tmp_file(temp_path)
+
+    @pytest.mark.base
+    @pytest.mark.perm
+    @pytest.mark.list
+    def test_nlst_eperm(self):
+        noperm_dir_name = self.uconfig.get("noperm_dir_name")
+        assert noperm_dir_name != None
+        noperm_dir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name)
+        with pytest.raises(ftplib.error_perm, match="Failed to"):
+            self.client.nlst(noperm_dir_path)
 
     @pytest.mark.base
     @pytest.mark.list
@@ -1930,6 +1986,87 @@ class TestFtpListingCmds(unittest.TestCase):
         subpaths = self.client.nlst(self.temp_dir_path)
         assert subsubpath in subpaths
         self.clean_tmp_dir(subsubpath)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_file(self):
+        subpaths = self.client.nlst(self.temp_file_path)
+        assert self.temp_file_path in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_leading_whitespace(self):
+        test_file_path = self.generate_valid_path(self.work_dir, self.share_name, ' testfile')
+        self.upload_empty_file(test_file_path)
+        subpaths = self.client.nlst(test_file_path)
+        assert test_file_path in subpaths
+        self.clean_tmp_file(test_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_dash_filename(self):
+        test_file_path = self.generate_valid_path(self.work_dir, self.share_name, '-testfile')
+        self.upload_empty_file(test_file_path)
+        subpaths = self.client.nlst(test_file_path)
+        assert test_file_path in subpaths
+        self.clean_tmp_file(test_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_trailing_slashes(self):
+        test_file_path = self.generate_valid_path(self.work_dir, self.share_name, '.testfile')
+        self.upload_empty_file(test_file_path)
+        test_path = self.generate_valid_path(self.work_dir, self.share_name) + '///.testfile'
+        subpaths = self.client.nlst(test_path)
+        assert test_file_path in subpaths
+        self.clean_tmp_file(test_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_parent(self):
+        self.client.cwd(self.temp_dir_path)
+        subpaths = self.client.nlst('..////')
+        assert any(os.path.basename(self.temp_dir_path) in s for s in subpaths) and \
+                any(os.path.basename(self.temp_file_path) in s for s in  subpaths)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_with_dot(self):
+        test_file_path = self.generate_valid_path(self.work_dir, self.share_name, '.testfile')
+        self.upload_empty_file(test_file_path)
+        self.client.cwd(self.get_share_path())
+        subpaths = self.client.nlst("-a")
+        assert any(os.path.basename(test_file_path) in s for s in subpaths)
+        self.clean_tmp_file(test_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_with_query(self):
+        clean_list = []
+        for i in range(100):
+            test_file_path = self.generate_valid_path(self.work_dir, self.share_name, 'testfile{:04d}'.format(i))
+            self.upload_empty_file(test_file_path)
+            clean_list.append(test_file_path)
+        subpaths = self.client.nlst(self.get_share_path() + '/testfile????')
+        assert len(subpaths) == 100
+        for tmp_path in clean_list:
+            self.clean_tmp_file(tmp_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_nlst_dotdir(self):
+        clean_list = []
+        dir_path = self.generate_valid_path(self.work_dir, self.share_name, '.testdir')
+        self.client.mkd(dir_path)
+        for i in range(100):
+            test_file_path = self.generate_valid_path(dir_path, 'testfile{:04d}'.format(i))
+            self.upload_empty_file(test_file_path)
+            clean_list.append(test_file_path)
+        subpaths = self.client.nlst(dir_path + '/testfile????')
+        assert len(subpaths) == 100
+        for tmp_path in clean_list:
+            self.clean_tmp_file(tmp_path)
+        self.client.rmd(dir_path)
 
     @pytest.mark.base
     @pytest.mark.list
@@ -1974,6 +2111,33 @@ class TestFtpListingCmds(unittest.TestCase):
 
     @pytest.mark.base
     @pytest.mark.list
+    def test_list_rel_path(self):
+        self.client.cwd(self.get_share_path())
+        l1 = []
+        self.client.retrlines('list', l1.append)
+        subpaths = [x.split(" ")[-1] for x in l1]
+        assert os.path.basename(self.temp_dir_path) in subpaths and os.path.basename(self.temp_file_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_glob_file(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = []
+        self.client.retrlines(f'list {TEST_PREFIX}*', subpaths.append)
+        subpaths = [x.split(" ")[-1] for x in subpaths]
+        assert os.path.basename(self.temp_file_path) in subpaths and os.path.basename(self.temp_dir_path) in subpaths
+
+    @pytest.mark.base
+    @pytest.mark.list
+    @pytest.mark.should_fail
+    def test_list_glob_enoent(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = []
+        self.client.retrlines(f'list foo*', subpaths.append)
+        assert subpaths == []
+
+    @pytest.mark.base
+    @pytest.mark.list
     def test_mlst_not_support(self):
         with pytest.raises(ftplib.error_perm, match="Unknown command"):
             self.client.voidcmd('mlst ' + self.get_share_path())
@@ -1988,7 +2152,7 @@ class TestFtpListingCmds(unittest.TestCase):
     @pytest.mark.stat
     def test_stat_dir_ok(self):
         resp = self.client.sendcmd('stat ' + self.get_share_path())
-        subpaths = [x.split(" ")[-1] for x in resp.split("\n")[1:-1]] 
+        subpaths = [x.split(" ")[-1] for x in resp.split("\n")[1:-1]]
         assert os.path.basename(self.temp_dir_path) in subpaths and os.path.basename(self.temp_file_path) in subpaths
 
     @pytest.mark.base
@@ -2002,7 +2166,7 @@ class TestFtpListingCmds(unittest.TestCase):
     def test_stat_enoent(self):
         temp_dir_path = self.get_tmp_path()
         resp = self.client.sendcmd('stat ' + temp_dir_path)
-        assert [] == [x for x in resp.split("\n")[1:-1]] 
+        assert [] == [x for x in resp.split("\n")[1:-1]]
 
     @pytest.mark.base
     @pytest.mark.stat
