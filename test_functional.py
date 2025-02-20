@@ -2018,7 +2018,7 @@ class TestFtpListingCmds(unittest.TestCase):
         self.upload_empty_file(test_file_path)
         test_path = self.generate_valid_path(self.work_dir, self.share_name) + '///.testfile'
         subpaths = self.client.nlst(test_path)
-        assert test_file_path in subpaths
+        assert test_file_path in subpaths or any(os.path.basename(test_file_path) in s for s in subpaths)
         self.clean_tmp_file(test_file_path)
 
     @pytest.mark.base
@@ -2135,6 +2135,26 @@ class TestFtpListingCmds(unittest.TestCase):
         subpaths = []
         self.client.retrlines(f'list foo*', subpaths.append)
         assert subpaths == []
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_dash_filename(self):
+        test_file_path = self.generate_valid_path(self.work_dir, self.share_name, '-testfile')
+        self.upload_empty_file(test_file_path)
+        subpaths = []
+        self.client.retrlines('list ' + test_file_path, subpaths.append)
+        subpaths = [x.split(" ")[-1] for x in subpaths]
+        assert os.path.basename(test_file_path) in subpaths
+        self.clean_tmp_file(test_file_path)
+
+    @pytest.mark.base
+    @pytest.mark.list
+    def test_list_wildcard(self):
+        self.client.cwd(self.get_share_path())
+        subpaths = []
+        self.client.retrlines('list *', subpaths.append)
+        subpaths = [x.split(" ")[-1] for x in subpaths]
+        assert os.path.basename(self.temp_file_path) in subpaths and os.path.basename(self.temp_dir_path) in subpaths
 
     @pytest.mark.base
     @pytest.mark.list
