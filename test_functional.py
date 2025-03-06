@@ -238,7 +238,7 @@ class TestFtpFsOperations(unittest.TestCase):
     @pytest.mark.symlink
     @pytest.mark.mkd
     def test_mkd_symlink_exist(self):
-        symlink_name = self.unconfig.get("symlink_dir_name")
+        symlink_name = self.uconfig.get("symlink_dir_name")
         assert symlink_name != None
         symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
         with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
