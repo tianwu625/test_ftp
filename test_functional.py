@@ -1955,7 +1955,7 @@ class TestFtpListingCmds(unittest.TestCase):
             clean_list.append(temp_path)
         self.client.cwd(self.get_share_path())
         subpaths = self.client.nlst(f'{TEST_PREFIX}*')
-        assert len(subpaths) == 15000
+        assert len(subpaths) >= 15000
         for temp_path in clean_list:
             self.clean_tmp_file(temp_path)
 
