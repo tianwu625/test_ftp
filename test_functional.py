@@ -459,6 +459,11 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.rename(temp_dir_path, self.temp_dir_path)
 
     @pytest.mark.base
+    @pytest.mark.rename
+    def test_rnfr_rnto_itself(self):
+        self.client.rename(self.temp_file_path, self.temp_file_path)
+
+    @pytest.mark.base
     @pytest.mark.symlink
     @pytest.mark.rename
     def test_rnfr_rnto_symlinkdir(self):
