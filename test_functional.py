@@ -554,6 +554,7 @@ class TestFtpFsOperations(unittest.TestCase):
                 pytest.fail(str(e))
         t1.join()
         dummy_sendfile.close()
+        self.clean_tmp_file(temp_file_path)
         self.clean_tmp_file(temp_file_path2)
 
     @pytest.mark.base
