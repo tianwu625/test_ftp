@@ -164,7 +164,7 @@ class TestFtpFsOperations(unittest.TestCase):
 
     def get_tmp_path(self, tmp_file=None):
         if tmp_file == None:
-            tmp_file = get_tmpfilename()
+            tmp_file = get_tmpfilename('-{}'.format(self._testMethodName))
         return self.generate_valid_path(self.work_dir, self.share_name, tmp_file)
 
     def make_tmp_dir(self):
@@ -271,7 +271,7 @@ class TestFtpFsOperations(unittest.TestCase):
     def test_mkd_with_cwd(self):
         share_path = self.get_share_path()
         self.client.cwd(share_path)
-        tmpdir = get_tmpfilename()
+        tmpdir = get_tmpfilename('-{}'.format(self._testMethodName))
         res_path = self.client.mkd(tmpdir)
         except_path = self.generate_valid_path(share_path, tmpdir)
         #assert res_path == except_path
@@ -281,7 +281,7 @@ class TestFtpFsOperations(unittest.TestCase):
     @pytest.mark.mkd
     def test_mkd_enoent(self):
         subdirpath = self.get_tmp_path()
-        subsubdir = get_tmpfilename()
+        subsubdir = get_tmpfilename('-{}'.format(self._testMethodName))
         subsubpath = self.generate_valid_path(subdirpath, subsubdir)
         with pytest.raises(ftplib.error_perm, match="Create directory operation failed"):
             self.client.mkd(subsubpath)
@@ -292,7 +292,7 @@ class TestFtpFsOperations(unittest.TestCase):
     def test_mkd_eperm(self):
         noperm_dir_name = self.uconfig.get("noperm_dir_name")
         assert noperm_dir_name != None
-        noperm_subdir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name, get_tmpfilename())
+        noperm_subdir_path = self.generate_valid_path(self.work_dir, self.share_name, noperm_dir_name, get_tmpfilename('-{}'.format(self._testMethodName)))
         with pytest.raises(ftplib.error_perm, match="Create directory opertion failed"):
             self.client.mkd(noperm_subdir_path)
 
@@ -368,7 +368,7 @@ class TestFtpFsOperations(unittest.TestCase):
     @pytest.mark.rmd
     def test_rmd_notempty(self):
         subpath = self.make_tmp_dir()
-        subsubname = get_tmpfilename()
+        subsubname = get_tmpfilename('-{}'.format(self._testMethodName))
         subsubpath = self.generate_valid_path(subpath, subsubname)
         self.client.mkd(subsubpath)
         with pytest.raises(ftplib.error_perm, match="Remove directory operation failed"):
@@ -390,7 +390,7 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.rmd(subpath)
 
     def make_tmp_file(self):
-        tmpfile = get_tmpfilename()
+        tmpfile = get_tmpfilename('-{}'.format(self._testMethodName))
         tmp_path = self.get_tmp_path(tmpfile)
         touch_filename(tmpfile)
         with open(tmpfile, 'rb') as f:
@@ -734,7 +734,7 @@ class TestFtpStoreData(unittest.TestCase):
         super().tearDown()
 
     def get_tmp_file_path(self):
-        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename('-{}'.format(self._testMethodName))]))
         if p.startswith('//'):
             return p.replace('//', '/')
         else:
@@ -1037,7 +1037,7 @@ class TestFtpRetrieveData(unittest.TestCase):
         super().tearDown()
 
     def get_tmp_file_path(self):
-        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename('-{}'.format(self._testMethodName))]))
         if p.startswith('//'):
             return p.replace('//', '/')
         else:
@@ -1800,7 +1800,7 @@ class TestFtpAbort(unittest.TestCase):
         self.client.retrlines('list', [].append)
 
     def get_tmp_file_path(self):
-        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename()]))
+        p = os.path.normpath('/'.join([self.work_dir, self.share_name, get_tmpfilename('-{}'.format(self._testMethodName))]))
         if p.startswith('//'):
             return p.replace('//', '/')
         else:
@@ -1879,7 +1879,7 @@ class TestFtpListingCmds(unittest.TestCase):
             pass
 
     def upload_empty_file(self, tmp_path):
-        tmpfile = get_tmpfilename()
+        tmpfile = get_tmpfilename('-{}'.format(self._testMethodName))
         touch_filename(tmpfile)
         with open(tmpfile, 'rb') as f:
             self.client.storbinary('stor ' + tmp_path, f)
@@ -1911,7 +1911,7 @@ class TestFtpListingCmds(unittest.TestCase):
 
     def get_tmp_path(self, tmp_file=None):
         if tmp_file == None:
-            tmp_file = get_tmpfilename()
+            tmp_file = get_tmpfilename('-{}'.format(self._testMethodName))
         return self.generate_valid_path(self.work_dir, self.share_name, tmp_file)
 
     @pytest.mark.base
@@ -1985,7 +1985,7 @@ class TestFtpListingCmds(unittest.TestCase):
     @pytest.mark.base
     @pytest.mark.list
     def test_nlst_subsub(self):
-        subsubname = get_tmpfilename()
+        subsubname = get_tmpfilename('-{}'.format(self._testMethodName))
         subsubpath = self.generate_valid_path(self.temp_dir_path, subsubname)
         self.client.mkd(subsubpath)
         subpaths = self.client.nlst(self.temp_dir_path)
@@ -2092,7 +2092,7 @@ class TestFtpListingCmds(unittest.TestCase):
     @pytest.mark.base
     @pytest.mark.list
     def test_list_subsub(self):
-        subsubname = get_tmpfilename()
+        subsubname = get_tmpfilename('-{}'.format(self._testMethodName))
         subsubpath = self.generate_valid_path(self.temp_dir_path, subsubname)
         self.client.mkd(subsubpath)
         subpaths = []
