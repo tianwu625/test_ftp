@@ -1807,6 +1807,12 @@ class TestFtpAbort(unittest.TestCase):
         else:
             return p
 
+    def clean_tmp_file(self, subpath):
+        try:
+            self.client.delete(subpath)
+        except Exception as e:
+            pass
+
     @pytest.mark.base
     @pytest.mark.abor
     def test_abor_during_transfer(self):
@@ -1839,6 +1845,7 @@ class TestFtpAbort(unittest.TestCase):
 
         t1.join()
         dummy_sendfile.close()
+        self.clean_tmp_file(temp_file_path)
 
 class TestFtpListingCmds(unittest.TestCase):
     """Test LIST, NLST, argumented STAT."""
