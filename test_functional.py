@@ -19,17 +19,21 @@ class TestFtpFsOperations(unittest.TestCase):
     """
     client_class = ftplib.FTP
 
-    def setUp(self):
-        super().setUp()
+    def create_client(self):
         server_host = self.uconfig.get('server_host')
         server_port = self.uconfig.get('server_port', 21)
         server_user = self.uconfig.get('server_user')
         server_password = self.uconfig.get('server_password')
         timeout = self.uconfig.get('global_timeout', GLOBAL_TIMEOUT)
         assert(server_host != None and server_user != None and server_password != None)
-        self.client = self.client_class(timeout=timeout)
-        self.client.connect(server_host, server_port)
-        self.client.login(server_user,server_password)
+        client = self.client_class(timeout=timeout)
+        client.connect(server_host, server_port)
+        client.login(server_user,server_password)
+        return client
+
+    def setUp(self):
+        super().setUp()
+        self.client = self.create_client()
         self.work_dir = self.uconfig.get('work_dir')
         self.share_name = self.uconfig.get('share_name')
         self.temp_dir_path = self.make_tmp_dir()
@@ -531,11 +535,14 @@ class TestFtpFsOperations(unittest.TestCase):
         self.client.storbinary("stor " + temp_file_path, dummy_sendfile)
         do_rename = False
         def do_rename_function():
+            client2 = self.create_client()
             try:
-                self.client.rename(temp_file_path, temp_file_path2)
+                client2.rename(temp_file_path, temp_file_path2)
             except Exception as e:
                 if not re.search("226", str(e)):
                     pytest.fail(str(e))
+            finally:
+                client2.close()
 
         with contextlib.closing(self.client.transfercmd("retr " + temp_file_path, None)) as conn:
             conn.settimeout(GLOBAL_TIMEOUT)
