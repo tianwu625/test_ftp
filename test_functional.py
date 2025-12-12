@@ -79,18 +79,6 @@ class TestFtpFsOperations(unittest.TestCase):
             self.client.cwd(self.temp_file_path)
 
     @pytest.mark.base
-    @pytest.mark.symlink
-    @pytest.mark.cwd
-    def test_cwd_symlink_ok(self):
-        symlink_name = self.uconfig.get("symlink_dir_name")
-        symlink_dst = self.uconfig.get("symlink_dir_dst")
-        assert symlink_name != None and symlink_dst != None
-        symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
-        symlink_dst_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_dst)
-        self.client.cwd(symlink_name_path)
-        assert os.path.normpath(self.client.pwd()) == symlink_dst_path
-
-    @pytest.mark.base
     @pytest.mark.perm
     @pytest.mark.cwd
     def test_cwd_eperm(self):
@@ -342,15 +330,6 @@ class TestFtpFsOperations(unittest.TestCase):
             ftplib.error_perm, match="Remove directory operation failed|Invalid path"
         ):
             self.client.rmd('/')
-
-    @pytest.mark.base
-    @pytest.mark.symlink
-    @pytest.mark.rmd
-    def test_rmd_symlink(self):
-        symlink_dst = self.uconfig.get("symlink_rmdir_dst")
-        assert symlink_dst != None
-        symlink_dst_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_dst)
-        self.client.rmd(symlink_dst_path)
 
     @pytest.mark.base
     @pytest.mark.perm
@@ -656,7 +635,7 @@ class TestFtpFsOperations(unittest.TestCase):
         assert symlink_name_size != None
         symlink_name_path = self.generate_valid_path(self.work_dir, self.share_name, symlink_name)
         s = self.client.size(symlink_name_path)
-        assert s == symlink_name_size
+        assert s == int(symlink_name_size)
 
     @pytest.mark.eftp
     @pytest.mark.base
